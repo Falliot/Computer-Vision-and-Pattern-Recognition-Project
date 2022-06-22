@@ -115,20 +115,28 @@ def main():
 
                    frame = augmentAruco(markerCorner, markerId, frame)
 
-                   for markerId in listOfIds:
-                       listOfExisting3DCoordinates.append(getExistingMarkers(markerId, listOf3DCoordinates))
-
-
-
             cv2.imshow("Drone recording", frame)
+
             # End of frame
+            for markerId in listOfIds:
+                listOfExisting3DCoordinates.append(getExistingMarkers(markerId, listOf3DCoordinates))
+
+            points2D = np.array(listOfRightCorners)
+            points3D = np.array(listOfExisting3DCoordinates)
+
+            # print("Count: ", len(listOfIds))
+            # print("Count: ", len(points2D))
+            # print("Count: ", len(points3D))
+
             # detectDronePosition()
+
+            # ret, rvecs, tvecs = cv2.solvePnp(points3D, )
 
             if markerId in listOfIds:
                 print("************************")
                 print(listOfIds)
-                print(listOfRightCorners)
-                print(listOfExisting3DCoordinates)
+                print(points2D)
+                print(points3D)
                 print("************************")
 
                 listOfIds.clear()
@@ -153,8 +161,8 @@ if __name__ == "__main__":
     main()
 
 # Calculate the position and camera orientation
-def detectDronePosition(listOfExisting3DCoordinates, listOfRightCorners, listOfIds, cameraIntrinsicMatrix):
-    if listOfExisting3DCoordinates.count < 4:
+def detectDronePosition(points3D, points_2D, listOfIds, cameraIntrinsicMatrix):
+    if points3D.count < 4:
         print("Not enought data to calculate the position")
     else:
         print("Calculating...")
