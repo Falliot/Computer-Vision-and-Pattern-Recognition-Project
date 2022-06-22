@@ -5,9 +5,6 @@ import numpy as np
 import os
 from openpyxl import load_workbook
 
-from logic import utils
-
-
 def loadAugImages(path):
     markersList = os.listdir(path)
     noOfMarkers =  len([name for name in markersList if name != ".DS_Store"])
@@ -20,18 +17,6 @@ def loadAugImages(path):
             augDict[key] = imgAug
 
     return augDict
-
-# looks like from the video we dont check blue wall
-def checkMarker(id):
-    match id:
-        case 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 76 | 77:
-            return "red"
-        case 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42:
-            return "green"
-        case 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 78 | 79 | 80 | 81 | 82 | 83:
-            return "blue"
-        case 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58| 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75:
-            return "orange"
 
 def findArucoMarkers(frame, markerSize=4, totalMarkers=100, draw=True):
     frameGray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -50,34 +35,24 @@ def findArucoMarkers(frame, markerSize=4, totalMarkers=100, draw=True):
         return [boundingBox, ids]
 
 
-def augmentAruco(markerCorner, id, img, imgAug, drawId=True):
-    tl = int(markerCorner[0][0][0]), int(markerCorner[0][0][1])
-    tr = int(markerCorner[0][1][0]), int(markerCorner[0][1][1])
-    br = int(markerCorner[0][2][0]), int(markerCorner[0][2][1])
-    bl = int(markerCorner[0][3][0]), int(markerCorner[0][3][1])
+def augmentAruco(markerCorner, id, img) :
+    corners = markerCorner.reshape((4, 2))
+    (topLeft, topRight, bottomRight, bottomLeft) = corners
+    # convert each of the (x, y)-coordinate pairs to integers
+    topRight = (int(topRight[0]), int(topRight[1]))
+    bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
+    bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
+    topLeft = (int(topLeft[0]), int(topLeft[1]))
 
-    h, w, c = imgAug.shape
+    # draw the bounding box of the ArUCo detection
+    cv2.line(img, topLeft, topRight, (0, 255, 0), 2)
+    cv2.line(img, topRight, bottomRight, (0, 255, 0), 2)
+    cv2.line(img, bottomRight, bottomLeft, (0, 255, 0), 2)
+    cv2.line(img, bottomLeft, topLeft, (0, 255, 0), 2)
 
-    points1 = np.array([tl, tr, br, bl])
-    points2 = np.float32([[0, 0],[w, 0], [w, h], [0, h]])
-    matrix, _ = cv2.findHomography(points2, points1)
-    imgOut = cv2.warpPerspective(imgAug, matrix, (img.shape[1], img.shape[0]))
-    cv2.fillConvexPoly(img, points1.astype(int), (0, 0, 0)) # instead of green image it's possible to use also a green color, just change 0, 0, 0 to 0, 255, 0
-    imgOut = img + imgOut
-
-
-    if drawId:
-        cv2.putText(
-            imgOut,
-            str(id),
-            tl,
-            cv2.FONT_HERSHEY_PLAIN,
-            2,
-            (0, 255, 255),
-            2
-        )
-
-    return imgOut
+    # draw the ArUco marker ID on the image
+    cv2.putText(img, str(id), (topLeft[0], topLeft[1] - 15), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 255), 2)
+    return img
 
 def read3DAcuroCoordinates():
     # Load Excel file with Markers
@@ -104,12 +79,11 @@ def main():
     cap = cv2.VideoCapture('/Users/falli_ot/Desktop/P3-HJ1 (ArUco)/project.avi') # Due to an unknown reason the file was converted to .avi format
     augDict = loadAugImages('../CVAPR_Project/markers')
     listOf3DCoordinates = read3DAcuroCoordinates()
-    listWithExistingMarkers = []
+    listOfExisting3DCoordinates = []
     listOfRightCorners = []
     listOfIds = []
 
     cameraIntrinsics = np.array([[1854, 0, 0], [0, 1854, 0], [1920, 1080, 1]])
-    # np.set_printoptions(suppress=True)
     print(cameraIntrinsics)
 
     # Check if the video capture is open
@@ -119,7 +93,6 @@ def main():
     while(cap.isOpened()):
         # Read frame:
         ret, frame = cap.read()
-
         if ret == True:
             arucoFound = findArucoMarkers(frame)
 
@@ -140,30 +113,32 @@ def main():
                    # print("ListOfIds: ", listOfIds)
                    # print("ListOfCorners: ", listOfRightCorners)
 
-                   color = checkMarker(markerId)
-                   frame = augmentAruco(markerCorner, markerId, frame, augDict[color])
+                   frame = augmentAruco(markerCorner, markerId, frame)
 
                    for markerId in listOfIds:
-                       listWithExistingMarkers.append(getExistingMarkers(markerId, listOf3DCoordinates))
+                       listOfExisting3DCoordinates.append(getExistingMarkers(markerId, listOf3DCoordinates))
+
+
 
             cv2.imshow("Drone recording", frame)
-
             # End of frame
+            # detectDronePosition()
+
             if markerId in listOfIds:
                 print("************************")
                 print(listOfIds)
                 print(listOfRightCorners)
-                print(listWithExistingMarkers)
+                print(listOfExisting3DCoordinates)
                 print("************************")
 
                 listOfIds.clear()
                 listOfRightCorners.clear()
-                listWithExistingMarkers.clear()
+                listOfExisting3DCoordinates.clear()
 
                 print("--------------------------------")
                 print("Empty ListOfIds: ", listOfIds)
                 print("Empty ListOfCorners: ", listOfRightCorners)
-                print("Empty ListOfExistingMarkers: ", listWithExistingMarkers)
+                print("Empty ListOfExistingMarkers: ", listOfExisting3DCoordinates)
 
             if cv2.waitKey(25) == ord('q'):
                 print("exit")
@@ -176,6 +151,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Calculate the position and camera orientation
+def detectDronePosition(listOfExisting3DCoordinates, listOfRightCorners, listOfIds, cameraIntrinsicMatrix):
+    if listOfExisting3DCoordinates.count < 4:
+        print("Not enought data to calculate the position")
+    else:
+        print("Calculating...")
+
 
 # camera intrinsic matrix python
 #  principal point:  divide by 2  -> cx = w/2
@@ -191,23 +174,3 @@ if __name__ == "__main__":
 
 # imagePoints = zeros(2, n) -> n nu,ber of arucon in the frame
 # plot 3D
-
-
-
-
-# [[1854    0    0]
-#  [   0 1854    0]
-#  [1920 1080    1]]
-
-
-  # Camera intrinsic
-  #   w = 3840
-  #   h = 2160
-  #   cx = w/2 # Principal point -> optical center
-  #   cy = h/2
-  #   fov = 92
-  #   fovRad = fov * math.pi / 180
-  #   fx = cx / math.tan(fovRad / 2) # focal length
-  #   fy = cx / math.tan(fovRad / 2)
-  #   intrinsic = get_camera_matrix(w, h, fov)
-  # print(intrinsic)
