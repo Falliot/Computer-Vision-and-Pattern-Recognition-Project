@@ -4,6 +4,7 @@ import cv2.aruco as aruco
 import numpy as np
 import os
 from openpyxl import load_workbook
+import matplotlib.pyplot as plt
 
 def loadAugImages(path):
     markersList = os.listdir(path)
@@ -72,7 +73,7 @@ def read3DAcuroCoordinates():
 def getExistingMarkers(markerId, listOf3DCoordinates):
     for i in listOf3DCoordinates:
         if i['Marker_ID'] == markerId:
-            return dict(i)
+            return (i['X'], i['Y'], i['Z'])
 
 def main():
     # Change path to the video on your machine
@@ -83,7 +84,10 @@ def main():
     listOfRightCorners = []
     listOfIds = []
 
-    cameraIntrinsics = np.array([[1854, 0, 0], [0, 1854, 0], [1920, 1080, 1]])
+    cameraIntrinsics = np.array(
+        [[1854, 0, 1920],
+         [0, 1854, 1080],
+         [0, 0, 1]], dtype=np.float32)
     print(cameraIntrinsics)
 
     # Check if the video capture is open
@@ -121,22 +125,36 @@ def main():
             for markerId in listOfIds:
                 listOfExisting3DCoordinates.append(getExistingMarkers(markerId, listOf3DCoordinates))
 
-            points2D = np.array(listOfRightCorners)
-            points3D = np.array(listOfExisting3DCoordinates)
+            points2D = np.array(listOfRightCorners, dtype=np.float32)
+            points3D = np.array(listOfExisting3DCoordinates, dtype=np.float32)
 
             # print("Count: ", len(listOfIds))
             # print("Count: ", len(points2D))
             # print("Count: ", len(points3D))
 
-            # detectDronePosition()
+            if len(points3D) < 4:
+                print("Not enought data to calculate the position")
+            else:
+                print("Calculating...")
+                success, rotation_vector, translation_vector = cv2.solvePnP(points3D, points2D, cameraIntrinsics, None)
 
-            # ret, rvecs, tvecs = cv2.solvePnp(points3D, )
+                rotM = cv2.Rodrigues(rotation_vector)[0]
+                # print("Position: ", Rt)
+                cameraPosition = -np.matrix(rotM).T * np.matrix(translation_vector)
+
+                print("Position: ", cameraPosition)
+
+                nose_end_point2D, jacobian = cv2.projectPoints(points3D, rotation_vector, translation_vector, cameraIntrinsics, None)
+                # np.array([(0.0, 0.0, 1000.0)])
+
+                # print("Results: ", nose_end_point2D)
+                # print("Results: ", jacobian)
 
             if markerId in listOfIds:
                 print("************************")
-                print(listOfIds)
-                print(points2D)
-                print(points3D)
+                # print(listOfIds)
+                # print(points2D)
+                # print(points3D)
                 print("************************")
 
                 listOfIds.clear()
@@ -161,11 +179,8 @@ if __name__ == "__main__":
     main()
 
 # Calculate the position and camera orientation
-def detectDronePosition(points3D, points_2D, listOfIds, cameraIntrinsicMatrix):
-    if points3D.count < 4:
-        print("Not enought data to calculate the position")
-    else:
-        print("Calculating...")
+# def detectDronePosition(points3D, points_2D, listOfIds, cameraIntrinsicMatrix):
+
 
 
 # camera intrinsic matrix python
